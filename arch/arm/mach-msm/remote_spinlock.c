@@ -70,7 +70,7 @@
 #define CURRENT_MODE_INIT AUTO_MODE;
 #endif
 
-#if defined CONFIG_ARCH_MSM8226
+#if defined CONFIG_ARCH_MSM8610
 #define SWP_OFF
 #endif
 
