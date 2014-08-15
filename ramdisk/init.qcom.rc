@@ -239,6 +239,9 @@ on post-fs-data
     #Create a folder for SRS to be able to create a usercfg file
     mkdir /data/data/media 0770 media media
 
+    #Import phantom extras
+    import /init.phantom.rc
+
 #service qcomsysd /system/bin/qcom-system-daemon
 #    class main
 
