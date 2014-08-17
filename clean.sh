@@ -3,3 +3,4 @@ make ARCH=arm CROSS_COMPILE=/home/shivam/development/toolchains/linaro-4.8-gener
 rm -rf $KERNEL_DIR/ramdisk.cpio
 rm -rf $KERNEL_DIR/root.fs
 rm -rf $KERNEL_DIR/boot.img
+rm -rf $KERNEL_DIR/dt.img
