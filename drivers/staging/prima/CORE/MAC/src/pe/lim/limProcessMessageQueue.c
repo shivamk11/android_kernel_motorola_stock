@@ -54,7 +54,7 @@
 #if defined WLAN_FEATURE_VOWIFI
 #include "rrmApi.h"
 #endif
-#if defined FEATURE_WLAN_CCX
+#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
 #include "ccxApi.h"
 #endif
 
@@ -69,6 +69,9 @@
 #include "vos_types.h"
 #include "vos_packet.h"
 #include "vos_memory.h"
+
+/* This value corresponds to 500 ms */
+#define MAX_PROBEREQ_TIME 5000
 
 void limLogSessionStates(tpAniSirGlobal pMac);
 
@@ -805,7 +808,7 @@ limHandle80211Frames(tpAniSirGlobal pMac, tpSirMsgQ limMsg, tANI_U8 *pDeferMsg)
                 }
             }
 #endif
-#ifdef FEATURE_WLAN_CCX
+#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
              /* We accept data frame (IAPP frame) only if Session is
               * present and ccx connection is established on that
               * session
@@ -1019,6 +1022,33 @@ void limProcessOemDataRsp(tpAniSirGlobal pMac, tANI_U32* body)
 
 #endif
 
+static tANI_BOOLEAN limAgeOutProbeReq( tpAniSirGlobal pMac, tpSirMsgQ  limMsg,
+                                       vos_pkt_t  *pVosPkt )
+{
+    tANI_U8    *pRxPacketInfo = NULL;
+    tSirMacFrameCtl  fc;
+    tpSirMacMgmtHdr    pHdr=NULL;
+    tANI_BOOLEAN match = VOS_FALSE;
+
+    limGetBDfromRxPacket(pMac, limMsg->bodyptr, (tANI_U32 **)&pRxPacketInfo);
+    pHdr = WDA_GET_RX_MAC_HEADER(pRxPacketInfo);
+    fc = pHdr->fc;
+    if ( fc.subType == SIR_MAC_MGMT_PROBE_REQ )
+    {
+        if(  vos_timer_get_system_ticks() - pVosPkt->timestamp >= MAX_PROBEREQ_TIME )
+        {
+            // drop packet
+           limLog(pMac, LOGE,
+           FL("Dropping Aged Out probe requests. Peer MAC is "MAC_ADDRESS_STR),
+                MAC_ADDR_ARRAY(pHdr->sa));
+
+            vos_pkt_return_packet(pVosPkt);
+            match = VOS_TRUE;
+        }
+    }
+    return match;
+}
+
 
 /**
  * limProcessMessages
@@ -1105,27 +1135,33 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
 
         case WDA_INIT_SCAN_RSP:
             limProcessInitScanRsp(pMac, limMsg->bodyptr);
+            limMsg->bodyptr = NULL;
             break;
 
         case WDA_START_SCAN_RSP:
             limProcessStartScanRsp(pMac, limMsg->bodyptr);
+            limMsg->bodyptr = NULL;
             break;
 
         case WDA_END_SCAN_RSP:
             limProcessEndScanRsp(pMac, limMsg->bodyptr);
+            limMsg->bodyptr = NULL;
             break;
 
         case WDA_FINISH_SCAN_RSP:
             limProcessFinishScanRsp(pMac, limMsg->bodyptr);
+            limMsg->bodyptr = NULL;
             break;
 #ifdef FEATURE_OEM_DATA_SUPPORT
         case WDA_START_OEM_DATA_RSP:
             limProcessOemDataRsp(pMac, limMsg->bodyptr);
+            limMsg->bodyptr = NULL;
             break;
 #endif
 
         case WDA_SWITCH_CHANNEL_RSP:
             limProcessSwitchChannelRsp(pMac, limMsg->bodyptr);
+            limMsg->bodyptr = NULL;
             break;
 
 #ifdef ANI_SIR_IBSS_PEER_CACHING
@@ -1167,6 +1203,18 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
                     break;
 
                 }
+
+                /*
+                * putting a check for age out probe request frames
+                * such that any probe req more than 0.5 sec old can directly
+                * be dropped. With this, there won't be blocking of MC thread.
+                */
+
+                if( limAgeOutProbeReq ( pMac, &limMsgNew, pVosPkt ))
+                {
+                   break;
+                }
+
 #ifdef FEATURE_WLAN_TDLS_INTERNAL
                 /*
                  * TDLS frames comes as translated frames as well as
@@ -1185,6 +1233,7 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
                 }
                 else
 #endif
+
                 limHandle80211Frames(pMac, &limMsgNew, &deferMsg);
 
                 if ( deferMsg == true )
@@ -1300,6 +1349,9 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
 #if defined WLAN_FEATURE_VOWIFI_11R || defined FEATURE_WLAN_CCX || defined(FEATURE_WLAN_LFR)
         case eWNI_SME_GET_ROAM_RSSI_REQ:
 #endif
+#if defined(FEATURE_WLAN_CCX) && defined(FEATURE_WLAN_CCX_UPLOAD)
+        case eWNI_SME_GET_TSM_STATS_REQ:
+#endif /* FEATURE_WLAN_CCX && FEATURE_WLAN_CCX_UPLOAD */
             // These messages are from HDD
             limProcessNormalHddMsg(pMac, limMsg, false);   //no need to response to hdd
             break;
@@ -1431,13 +1483,9 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
                         vos_mem_copy(&psessionEntry->p2pGoPsUpdate, limMsg->bodyptr,
                                      sizeof(tSirP2PNoaAttr));
 
-                        limLog(pMac, LOG2, FL(" &psessionEntry->bssId%02x:%02x:%02x:%02x:%02x:%02x ctWin=%d oppPsFlag=%d"),
-                                     psessionEntry->bssId[0],
-                                     psessionEntry->bssId[1],
-                                     psessionEntry->bssId[2],
-                                     psessionEntry->bssId[3],
-                                     psessionEntry->bssId[4],
-                                     psessionEntry->bssId[5],
+                        limLog(pMac, LOG2, FL(" &psessionEntry->bssId "
+                                     MAC_ADDRESS_STR " ctWin=%d oppPsFlag=%d"),
+                                     MAC_ADDR_ARRAY(psessionEntry->bssId),
                                      psessionEntry->p2pGoPsUpdate.ctWin,
                                      psessionEntry->p2pGoPsUpdate.oppPsFlag);
 
@@ -1512,10 +1560,16 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
             break;
 #ifdef FEATURE_WLAN_CCX
         case SIR_LIM_CCX_TSM_TIMEOUT:
+#ifndef FEATURE_WLAN_CCX_UPLOAD
             limProcessTsmTimeoutHandler(pMac,limMsg);
+#endif /* FEATURE_WLAN_CCX_UPLOAD */
             break;
         case WDA_TSM_STATS_RSP:
+#ifdef FEATURE_WLAN_CCX_UPLOAD
+            limSendSmePECcxTsmRsp(pMac, (tAniGetTsmStatsRsp *)limMsg->bodyptr);
+#else
             limProcessHalCcxTsmRsp(pMac, limMsg);
+#endif /* FEATURE_WLAN_CCX_UPLOAD */
             break;
 #endif
         case WDA_ADD_TS_RSP:
@@ -1762,15 +1816,8 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
             VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
                                 ("TDLS setup rsp timer expires ")) ;
             VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,
-                       ("TDLS setup rsp timer expires for peer:")) ;
-            VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,
-                    ("%02X, %02X, %02X,%02X, %02X, %02X"),
-                                    peerMac[0],
-                                    peerMac[1],
-                                    peerMac[2],
-                                    peerMac[3],
-                                    peerMac[4],
-                                    peerMac[5]);
+                      ("TDLS setup rsp timer expires for peer:"
+                      MAC_ADDRESS_STR), MAC_ADDR_ARRAY(peerMac));
 
             limTdlsFindLinkPeer(pMac, peerMac, &setupPeer) ;
             if(NULL != setupPeer)
@@ -1790,15 +1837,8 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
             VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
                                 ("TDLS setup CNF timer expires ")) ;
             VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,
-                      ("TDLS setup CNF timer expires for peer:")) ;
-            VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_INFO,
-                         ("%02X, %02X, %02X,%02X, %02X, %02X"),
-                                    peerMac[0],
-                                    peerMac[1],
-                                    peerMac[2],
-                                    peerMac[3],
-                                    peerMac[4],
-                                    peerMac[5]);
+                      ("TDLS setup CNF timer expires for peer: "
+                       MAC_ADDRESS_STR), MAC_ADDR_ARRAY(peerMac));
             limTdlsFindLinkPeer(pMac, peerMac, &setupPeer) ;
             if(NULL != setupPeer)
             {
@@ -1896,6 +1936,7 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
 
            /*Free message body pointer*/
            vos_mem_free((v_VOID_t *)(limMsg->bodyptr));
+           limMsg->bodyptr = NULL;
            break;
        }
 
@@ -1921,6 +1962,7 @@ limProcessMessages(tpAniSirGlobal pMac, tpSirMsgQ  limMsg)
           linkStateParams->callback( pMac, linkStateParams->callbackArg );
        }
        vos_mem_free((v_VOID_t *)(limMsg->bodyptr));
+       limMsg->bodyptr = NULL;
        break;
 
 #ifdef WLAN_FEATURE_PACKET_FILTERING
@@ -2128,6 +2170,7 @@ void limProcessNormalHddMsg(tpAniSirGlobal pMac, tSirMsgQ *pLimMsg, tANI_U8 fRsp
             limPrintMsgName(pMac, LOGE, pLimMsg->type);
             // Release body
             vos_mem_free(pLimMsg->bodyptr);
+            pLimMsg->bodyptr = NULL;
         }
     }
     else
@@ -2148,6 +2191,7 @@ void limProcessNormalHddMsg(tpAniSirGlobal pMac, tSirMsgQ *pLimMsg, tANI_U8 fRsp
             // Release body
             // limProcessSmeReqMessage consumed the buffer. We can free it.
             vos_mem_free(pLimMsg->bodyptr);
+            pLimMsg->bodyptr = NULL;
         }
     }
 }
