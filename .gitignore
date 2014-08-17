@@ -85,3 +85,9 @@ GTAGS
 *.orig
 *~
 \#*#
+
+# kernel files
+boot.img
+dt.img
+ramdisk.cpio
+root.fs
