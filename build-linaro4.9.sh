@@ -23,7 +23,7 @@ cd $MODULES_DIR
 echo "Stripping modules for size"
 $TOOLCHAIN-strip --strip-unneeded *.ko
 cd $KERNEL_DIR
-$DTBTOOL -2 -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
+$DTBTOOL -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
 $MKBOOTFS ramdisk/ > $KERNEL_DIR/ramdisk.cpio
 cat $KERNEL_DIR/ramdisk.cpio | gzip > $KERNEL_DIR/root.fs
 $MKBOOTIMG --kernel $ZIMAGE --ramdisk $KERNEL_DIR/root.fs --base 0x00000000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 --cmdline "console=ttyHSL0,115200,n8 androidboot.console=ttyHSL0 androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x37 utags.blkdev=/dev/block/platform/msm_sdcc.1/by-name/utags vmalloc=400M" --pagesize 2048 --dt dt.img -o $KERNEL_DIR/boot.img
