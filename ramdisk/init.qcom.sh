@@ -38,13 +38,20 @@ fi
 start_sensors()
 {
     if [ -c /dev/msm_dsps -o -c /dev/sensors ]; then
-        chmod -h 775 /persist/sensors
-        chmod -h 664 /persist/sensors/sensors_settings
-        chown -h system.root /persist/sensors/sensors_settings
+        mkdir -p /data/system/sensors
+        touch /data/system/sensors/settings
+        chmod 775 /data/system/sensors
+        chmod 664 /data/system/sensors/settings
+        chown system /data/system/sensors/settings
 
         mkdir -p /data/misc/sensors
-        chmod -h 775 /data/misc/sensors
+        chmod 775 /data/misc/sensors
 
+        if [ ! -s /data/system/sensors/settings ]; then
+            # If the settings file is empty, enable sensors HAL
+            # Otherwise leave the file with it's current contents
+            echo 1 > /data/system/sensors/settings
+        fi
         start sensors
     fi
 }
@@ -52,16 +59,16 @@ start_sensors()
 start_battery_monitor()
 {
 	if ls /sys/bus/spmi/devices/qpnp-bms-*/fcc_data ; then
-		chown -h root.system /sys/module/pm8921_bms/parameters/*
-		chown -h root.system /sys/module/qpnp_bms/parameters/*
-		chown -h root.system /sys/bus/spmi/devices/qpnp-bms-*/fcc_data
-		chown -h root.system /sys/bus/spmi/devices/qpnp-bms-*/fcc_temp
-		chown -h root.system /sys/bus/spmi/devices/qpnp-bms-*/fcc_chgcyl
-		chmod -h 0660 /sys/module/qpnp_bms/parameters/*
-		chmod -h 0660 /sys/module/pm8921_bms/parameters/*
+		chown root.system /sys/module/pm8921_bms/parameters/*
+		chown root.system /sys/module/qpnp_bms/parameters/*
+		chown root.system /sys/bus/spmi/devices/qpnp-bms-*/fcc_data
+		chown root.system /sys/bus/spmi/devices/qpnp-bms-*/fcc_temp
+		chown root.system /sys/bus/spmi/devices/qpnp-bms-*/fcc_chgcyl
+		chmod 0660 /sys/module/qpnp_bms/parameters/*
+		chmod 0660 /sys/module/pm8921_bms/parameters/*
 		mkdir -p /data/bms
-		chown -h root.system /data/bms
-		chmod -h 0770 /data/bms
+		chown root.system /data/bms
+		chmod 0770 /data/bms
 		start battery_monitor
 	fi
 }
@@ -69,16 +76,14 @@ start_battery_monitor()
 start_charger_monitor()
 {
 	if ls /sys/module/qpnp_charger/parameters/charger_monitor; then
-		chown -h root.system /sys/module/qpnp_charger/parameters/*
-		chown -h root.system /sys/class/power_supply/battery/input_current_max
-		chown -h root.system /sys/class/power_supply/battery/input_current_trim
-		chown -h root.system /sys/class/power_supply/battery/input_current_settled
-		chown -h root.system /sys/class/power_supply/battery/voltage_min
-		chmod -h 0664 /sys/class/power_supply/battery/input_current_max
-		chmod -h 0664 /sys/class/power_supply/battery/input_current_trim
-		chmod -h 0664 /sys/class/power_supply/battery/input_current_settled
-		chmod -h 0664 /sys/class/power_supply/battery/voltage_min
-		chmod -h 0664 /sys/module/qpnp_charger/parameters/charger_monitor
+		chown root.system /sys/module/qpnp_charger/parameters/*
+		chown root.system /sys/class/power_supply/battery/input_current_max
+		chown root.system /sys/class/power_supply/battery/input_current_trim
+		chown root.system /sys/class/power_supply/battery/voltage_min
+		chmod 0664 /sys/class/power_supply/battery/input_current_max
+		chmod 0664 /sys/class/power_supply/battery/input_current_trim
+		chmod 0664 /sys/class/power_supply/battery/voltage_min
+		chmod 0664 /sys/module/qpnp_charger/parameters/charger_monitor
 		start charger_monitor
 	fi
 }
@@ -100,12 +105,6 @@ echo 1 > /proc/sys/net/ipv6/conf/default/accept_ra_defrtr
 #
 # Start gpsone_daemon for SVLTE Type I & II devices
 #
-
-# platform id 126 is for MSM8974
-case "$platformid" in
-        "126")
-        start gpsone_daemon
-esac
 case "$target" in
         "msm7630_fusion")
         start gpsone_daemon
@@ -217,9 +216,6 @@ case "$target" in
         start_charger_monitor
         ;;
     "msm8226")
-        start_charger_monitor
-        ;;
-    "msm8610")
         start_charger_monitor
         ;;
 esac

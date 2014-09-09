@@ -140,23 +140,10 @@ case "$1" in
         esac
         ;;
 
-    "msm8610")
+    "msm8610" | "apq8084")
         case "$soc_hwplatform" in
             *)
                 setprop ro.sf.lcd_density 240
-                ;;
-        esac
-        ;;
-    "apq8084")
-        case "$soc_hwplatform" in
-            "Liquid")
-                setprop ro.sf.lcd_density 293
-                # Liquid do not have hardware navigation keys, so enable
-                # Android sw navigation bar
-                setprop ro.hw.nav_keys 0
-                ;;
-            *)
-                setprop ro.sf.lcd_density 440
                 ;;
         esac
         ;;
@@ -166,31 +153,24 @@ esac
 # HDMI can be fb1 or fb2
 # Loop through the sysfs nodes and determine
 # the HDMI(dtv panel)
-for fb_cnt in 0 1 2
+for file in /sys/class/graphics/fb*
 do
-file=/sys/class/graphics/fb$fb_cnt
-dev_file=/dev/graphics/fb$fb_cnt
-  if [ -d "$file" ]
-  then
     value=`cat $file/msm_fb_type`
     case "$value" in
             "dtv panel")
-        chown -h system.graphics $file/hpd
-        chown -h system.system $file/hdcp/tp
-        chown -h system.graphics $file/vendor_name
-        chown -h system.graphics $file/product_description
-        chmod -h 0664 $file/hpd
-        chmod -h 0664 $file/hdcp/tp
-        chmod -h 0664 $file/vendor_name
-        chmod -h 0664 $file/product_description
-        chmod -h 0664 $file/video_mode
-        chmod -h 0664 $file/format_3d
+        chown system.graphics $file/hpd
+        chown system.graphics $file/vendor_name
+        chown system.graphics $file/product_description
+        chmod 0664 $file/hpd
+        chmod 0664 $file/vendor_name
+        chmod 0664 $file/product_description
+        chmod 0664 $file/video_mode
+        chmod 0664 $file/format_3d
         # create symbolic link
-        ln -s $dev_file /dev/graphics/hdmi
+        ln -s $file /dev/graphics/hdmi
         # Change owner and group for media server and surface flinger
-        chown -h system.system $file/format_3d;;
+        chown system.system $file/format_3d;;
     esac
-  fi
 done
 
 # Set date to a time after 2008

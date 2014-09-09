@@ -1,5 +1,6 @@
 #!/system/bin/sh
-# Copyright (c) 2013, The Linux Foundation. All rights reserved.
+# Copyright (c) 2014, Shivam Kuchhal <shivamk11@gmail.com>
+# Copyright (c) 2009-2014, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -26,52 +27,36 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-#
-# start ril-daemon only for targets on which radio is present
-#
-baseband=`getprop ro.baseband`
-netmgr=`getprop ro.use_data_netmgrd`
-sgltecsfb=`getprop persist.radio.sglte_csfb`
+# Sweep2Sleep default
+if [ -e /sys/android_touch/sweep2wake ]; then
+	if [ -e /sys/android_touch/sweep2dim ]; then
+		echo "2" > /sys/android_touch/sweep2wake
+		echo "0" > /sys/android_touch/sweep2dim
+		echo "73" > /sys/module/sweep2wake/parameters/down_kcal
+		echo "73" > /sys/module/sweep2wake/parameters/up_kcal
+		echo "[phantom] sweep2sleep/dim configured!" | tee /dev/kmsg
+	else
+		echo "[phantom] sweep2dim not found" | tee /dev/kmsg
+	fi
+else
+	echo "[phantom] sweep2wake not found" | tee /dev/kmsg
+fi
 
-case "$baseband" in
-    "apq")
-    setprop ro.radio.noril yes
-    stop ril-daemon
-esac
+# Enable powersuspend
+if [ -e /sys/kernel/power_suspend/power_suspend_mode ]; then
+	echo "1" > /sys/kernel/power_suspend/power_suspend_mode
+	echo "[phantom] Powersuspend enabled" | tee /dev/kmsg
+else
+	echo "[phantom] Failed to set powersuspend" | tee /dev/kmsg
+fi
 
-case "$baseband" in
-    "msm" | "csfb" | "svlte2a" | "mdm" | "sglte" | "sglte2" | "dsda2" | "unknown")
-    start qmuxd
-    case "$baseband" in
-        "svlte2a" | "csfb")
-          start qmiproxy
-        ;;
-        "sglte" | "sglte2" )
-          if [ "x$sgltecsfb" != "xtrue" ]; then
-              start qmiproxy
-          else
-              setprop persist.radio.voice.modem.index 0
-          fi
-        ;;
-        "dsda2")
-          setprop persist.radio.multisim.config dsda
-    esac
-
-    multisim=`getprop persist.radio.multisim.config`
-
-    if [ "$multisim" = "dsds" ] || [ "$multisim" = "dsda" ]; then
-        stop ril-daemon
-        start ril-daemon
-        start ril-daemon1
-    elif [ "$multisim" = "tsts" ]; then
-        stop ril-daemon
-        start ril-daemon
-        start ril-daemon1
-        start ril-daemon2
-    fi
-
-    case "$netmgr" in
-        "true")
-        start netmgrd
-    esac
-esac
+# Set RGB KCAL
+if [ -e /sys/devices/platform/kcal_ctrl.0/kcal ]; then
+	sd_r=255
+	sd_g=255
+	sd_b=255
+	kcal="$sd_r $sd_g $sd_b"
+	echo "$kcal" > /sys/devices/platform/kcal_ctrl.0/kcal
+	echo "1" > /sys/devices/platform/kcal_ctrl.0/kcal_ctrl
+	echo "[phantom] LCD_KCAL: red=[$sd_r], green=[$sd_g], blue=[$sd_b]" | tee /dev/kmsg
+fi

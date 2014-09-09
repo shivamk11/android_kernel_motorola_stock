@@ -26,35 +26,43 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+#
+# start two rild when dsds property enabled
+#
+multisim=`getprop persist.radio.multisim.config`
+if [ "$multisim" = "dsds" ] || [ "$multisim" = "dsda" ]; then
+        stop ril-daemon
+        start ril-daemon
+        start ril-daemon1
+elif [ "$multisim" = "tsts" ]; then
+        stop ril-daemon
+        start ril-daemon
+        start ril-daemon1
+        start ril-daemon2
+fi
+
 carrier=`getprop persist.env.spec`
 if [ "$carrier" = "ChinaTelecom" ]; then
     # Update the props.
     setprop persist.env.phone.global true
     setprop persist.env.plmn.update true
 
-    # Define flag which can be used for testing with non secure phones.
-    # Such devices have a writable system partition.
-    if [ -f /data/test/can_write_system_flag ]; then
     # Remount /system with read-write permission for copy action.
     `mount -o remount,rw /system`
 
     # Copy the modules to system app.
     `cp /system/vendor/ChinaTelecom/system/app/RoamingSettings.apk /system/app/RoamingSettings.apk`
     `cp /system/vendor/ChinaTelecom/system/app/UniversalDownload.apk /system/app/UniversalDownload.apk`
-    `chmod -h 644 /system/app/RoamingSettings.apk`
-    `chmod -h 644 /system/app/UniversalDownload.apk`
+    `chmod 644 /system/app/RoamingSettings.apk`
+    `chmod 644 /system/app/UniversalDownload.apk`
 
     # Remount /system with read-only
     `mount -o remount,ro /system`
-    fi
 else
     # Update the props.
     setprop persist.env.phone.global false
     setprop persist.env.plmn.update false
 
-    # Define flag which can be used for testing with non secure phones.
-    # Such devices have a writable system partition.
-    if [ -f /data/test/can_write_system_flag ]; then
     # Remount /system with read-write permission for remove action.
     `mount -o remount,rw /system`
 
@@ -64,5 +72,4 @@ else
 
     # Remount /system with read-only
     `mount -o remount,ro /system`
-    fi
 fi
