@@ -1,4 +1,4 @@
-# Copyright (c) 2012, The Linux Foundation. All rights reserved.
+# Copyright (c) 2012, 2014, The Linux Foundation. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -92,10 +92,10 @@ service qseecomd /system/bin/qseecomd
    user system
    group system
 
-#service qrngd /system/bin/qrngd -f
-#   class main
-#   user root
-#   group root
+service qrngd /system/bin/qrngd -f
+   class main
+   user root
+   group root
 
 #start camera server as daemon
 service qcamerasvr /system/bin/mm-qcamera-daemon
@@ -114,6 +114,16 @@ service wcnss-service /system/bin/wcnss_service
     group system wifi
     oneshot
 
+service qrngp /system/bin/qrngp
+    class main
+    user root
+    group root
+    oneshot
+    disabled
+
+on property:sys.boot_completed=1
+    start qrngp
+
 service ppd /system/bin/mm-pp-daemon
     class late_start
     user system
@@ -122,3 +132,10 @@ service ppd /system/bin/mm-pp-daemon
 
 on property:init.svc.surfaceflinger=stopped
     stop ppd
+service mmi-ril-daemon /system/bin/rild
+    class main
+    socket rild stream 660 root radio
+    socket rild-debug stream 660 radio system
+    socket cutback stream 660 media radio
+    user root
+    group radio cache inet misc audio sdcard_rw qcom_oncrpc qcom_diag log net_raw diag
